@@ -1,0 +1,414 @@
+\documentclass[11pt,a4paper]{article}
+
+% ===================== PACKAGES =====================
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,fit,backgrounds,shapes.geometric}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true, linkcolor=blue!50!black, citecolor=blue!50!black, urlcolor=blue!50!black}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{caption}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{Atelier 1 -- Architecture Logicielle}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\titleformat{\section}{\normalfont\Large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalfont\large\bfseries}{\thesubsection}{1em}{}
+
+% Couleurs pour les diagrammes
+\definecolor{clientCol}{RGB}{198,224,255}
+\definecolor{gwCol}{RGB}{255,229,180}
+\definecolor{svcCol}{RGB}{204,236,204}
+\definecolor{dataCol}{RGB}{230,204,255}
+\definecolor{extCol}{RGB}{230,230,230}
+\definecolor{mgrCol}{RGB}{255,204,204}
+
+\newcommand{\demarche}[1]{\par\noindent\textbf{Démarche/justification :} #1\par}
+
+% ===================== DOCUMENT =====================
+\begin{document}
+
+% --------------------- PAGE DE TITRE ---------------------
+\begin{titlepage}
+\centering
+\vspace*{1.5cm}
+{\LARGE\bfseries Atelier 1 -- Architecture Logicielle\par}
+\vspace{0.5cm}
+{\Large Modélisation C4\par
+du système \emph{Parallel Collective Tiny Deep Learning System} (DNN//$^{*}$Tcs)\par}
+\vspace{1.5cm}
+
+{\large Module \emph{Analyse et Modélisation des Architectures Logicielles}\par
+KALLALA Hala\\
+CHARFEDDINE Nermine\\
+BOUCHENDIRA Mariem\\
+\par}
+\vspace{1cm}
+{\large 25 septembre 2026\par}
+
+\vfill
+
+\begin{abstract}
+\noindent Ce rapport analyse l'article \emph{« Parallel Collective Tiny Deep Learning System for Face and Object Reidentification in Uncontrolled Environments »} (Helaoui \& Bahroun, Research Square, 2025) à la lumière du vocabulaire et de la taxonomie du Chapitre I du cours (styles architecturaux, distinction architecture matérielle/logicielle, Intelligence Artificielle Distribuée). Il propose ensuite une nouvelle architecture modélisée avec le C4 Model, qui corrige les limites identifiées de l'architecture existante . Un protocole de validation qualitatif et quantitatif est enfin proposé.
+\end{abstract}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =====================================================
+\section{Introduction et cadre conceptuel de l'atelier}
+% =====================================================
+
+Cet atelier s'appuie sur les notions fondamentales d'analyse et de modélisation des architectures logicielles. Une architecture y est considérée comme l'organisation des composants logiciels, de leurs données et de leurs communications afin de répondre à un problème donné. Cette approche permet d'étudier un système au-delà de ses algorithmes, en examinant également sa structure, son déploiement et les interactions entre ses différentes parties.
+
+Le système DNN//$^{*}$Tcs mobilise plusieurs styles, notamment les architectures client-serveur, microservices, parallèles, distribuées et orientées événements. Il relève aussi de l'Intelligence Artificielle Distribuée (IAD), puisque plusieurs modèles jouent le rôle de décideurs et coopèrent, pour produire une décision collective.
+
+L'analyse accordera une attention particulière à la distinction entre \textbf{architecture logicielle} et \textbf{architecture matérielle}. La première décrit les services, leurs responsabilités et leurs échanges, tandis que la seconde concerne les machines, le réseau et les ressources physiques de déploiement. Le modèle C4 sera utilisé pour rendre cette séparation explicite et présenter le contexte, les conteneurs, les composants et leur déploiement.
+
+L'objectif de ce travail est donc d'analyser l'architecture existante de DNN//$^{*}$Tcs à partir de la taxonomie , d'en relever les principales limites, puis de proposer une architecture améliorée, résiliente, sécurisée et évolutive. Enfin, des méthodes de validation qualitatives et quantitatives seront définies afin d'évaluer les améliorations proposées.
+
+\newpage
+% =====================================================
+\section{Question 1 -- Analyse de l'architecture existante}
+% =====================================================
+
+\subsection{Vue d'ensemble du système étudié}
+Le système DNN//$^{*}$Tcs est organisé en trois niveaux physiques et logiques~:
+\begin{itemize}
+\item \textbf{Niveau Client} : application mobile (smartphone, lunettes connectées) exécutant une version « lite » des services de reconnaissance, en multiprocessing local (1 processus $\approx$ 1 service) .
+\item \textbf{Niveau Serveur} : machine(s) plus puissante(s) exécutant en parallèle plusieurs versions de chaque service (CNN, DNN, RNN...), un processeur (ou cœur) étant dédié à chaque service/version .
+\item \textbf{Niveau Tiny / Edge} : micro-contrôleurs (type Arduino) attachés physiquement aux objets/personnes, qui envoient leurs caractéristiques (identité, position, dimensions) directement au client et au serveur, indépendamment de l'analyse vidéo.
+\end{itemize}
+
+
+\subsubsection*{Diagramme de composants reconstruit}
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[
+  node distance=0.9cm and 1.2cm,
+  box/.style={draw, rounded corners, minimum width=2.6cm, minimum height=1cm, align=center, font=\small},
+  arr/.style={-{Latex[length=2mm]}, thick}
+]
+\node[box, fill=clientCol] (client) {Client mobile\\(app légère)};
+\node[box, fill=gwCol, right=of client] (gw) {Gateway\\(API REST)};
+\node[box, fill=mgrCol, right=of gw] (mgr) {Parallel\\Collective Manager};
+\node[box, fill=svcCol, above right=0.5cm and 1.4cm of mgr] (face) {Face\\Recognition};
+\node[box, fill=svcCol, right=1.4cm of mgr] (obj) {Object\\Detection};
+\node[box, fill=svcCol, below right=0.5cm and 1.4cm of mgr] (gender) {Gender\\Classification};
+\node[box, fill=svcCol, below=0.9cm of gender] (emo) {Emotion};
+\node[box, fill=extCol, below=1.2cm of client] (tiny) {Objets Tiny\\(micro-contrôleurs)};
+
+\draw[arr] (client) -- (gw);
+\draw[arr] (gw) -- (mgr);
+\draw[arr] (mgr) -- (face);
+\draw[arr] (mgr) -- (obj);
+\draw[arr] (mgr) -- (gender);
+\draw[arr] (mgr) -- (emo);
+\draw[arr] (tiny) -- (client);
+\draw[arr] (tiny) -- (mgr);
+\end{tikzpicture}
+\caption{Diagramme de composants reconstruit de l'architecture existante.}
+\end{figure}
+
+\subsection{Classement du système DNN//$^{*}$Tcs dans la taxonomie du cours}
+\renewcommand{\arraystretch}{1.25}
+\begin{longtable}{>{\raggedright\arraybackslash}p{3.1cm}
+                  >{\raggedright\arraybackslash}p{4.7cm}
+                  >{\raggedright\arraybackslash}p{5.5cm}}
+\toprule
+\textbf{Style architectural} & \textbf{Éléments observés} & \textbf{Justification du classement} \\
+\midrule
+\endhead
+Client-serveur à trois niveaux
+& Client mobile, serveur de calcul et objets Tiny/Edge.
+& Les traitements sont répartis entre une application légère, un serveur puissant et des équipements embarqués qui fournissent des données complémentaires. \\
+\midrule
+Microservices
+& Services spécialisés de reconnaissance, d'affichage, de restitution et d'apprentissage.
+& Chaque fonction est isolée dans un service ou un processus pouvant être exécuté indépendamment. \\
+\midrule
+Architecture orientée services (partielle)
+& Gateway et API REST reliant le client aux services.
+& La Gateway centralise l'accès et achemine les requêtes. \\
+\midrule
+Architecture en pipeline
+& Reconnaissance $\rightarrow$ affichage $\rightarrow$ mise à jour des données $\rightarrow$ réentraînement.
+& Les résultats produits par une étape deviennent les entrées de l'étape suivante. \\
+\midrule
+Architecture parallèle
+& Plusieurs services et versions de modèles sont exécutés simultanément sur différents cœurs.
+& Le parallélisme réduit la latence et permet de comparer plusieurs résultats de reconnaissance. \\
+\midrule
+Système distribué hybride
+& Smartphone, serveur multi-cœurs et microcontrôleurs Arduino interconnectés.
+& Les composants s'exécutent sur des équipements distincts et coopèrent par le réseau pour réaliser une tâche commune. \\
+\midrule
+Intelligence Artificielle Distribuée (IAD)
+& Plusieurs modèles décisionnaires et un \texttt{MSParallelCollectiveManager}.
+& La fonction \texttt{Choose()} agrège les résultats des modèles afin de sélectionner une décision collective. \\
+\bottomrule
+\caption{Synthèse du classement architectural du système DNN//$^{*}$Tcs.}
+\end{longtable}
+\renewcommand{\arraystretch}{1}
+
+\subsection{Vue matérielle vs vue logicielle }
+\begin{itemize}
+\item \textbf{Architecture matérielle} (telle que décrite dans l'article) : laptop Dell Vostro 3400 (4 cœurs, i3-1115G4), smartphone client, cartes Arduino pour les objets tiny.
+\item \textbf{Architecture logicielle} : l'organisation des micro-services (\texttt{MSParallelCollectiveRequest}, \texttt{MSTinyParallelCollective}, \texttt{MSParallelCollectiveManager}) et leurs interactions .
+\end{itemize}
+
+\subsection{Attributs de qualité visés par l'architecture existante}
+\begin{itemize}
+\item \textbf{Temps réel} : parallélisation systématique (multi-processus, multi-cœurs) pour respecter une contrainte de latence.
+\item \textbf{Précision / fiabilité} : exécution collective de plusieurs versions d'un même service, sélection de la meilleure réponse (réduction des faux positifs démontrée expérimentalement, Tables 1 à 3 et matrices de confusion de l'article).
+\item \textbf{Portabilité} : version « lite » adaptable à différents smartphones.
+\item \textbf{Faible coût} : usage de microcontrôleurs bon marché (TinyML) plutôt que de capteurs complexes.
+\end{itemize}
+
+\subsection{Limites identifiées}
+\begin{enumerate}
+\item \textbf{Couplage architecture logicielle/matérielle} (cf. 2.3) : le nombre optimal de processeurs $P^{*}$ est calculé directement en fonction du nombre de neurones par couche .Contraire au principe de séparation du cours tel que toute évolution du modèle DNN impose de recalculer et redimensionner l'infrastructure (faible élasticité).
+\item \textbf{Manager IAD centralisé (point unique de défaillance)} : le cours définit l'IAD comme une coopération de $N$ décideurs,dans l'article, cette fonction (\texttt{Choose()}, portée par le \texttt{MSParallelCollectiveManager}) est centralisée côté serveur et sa panne bloque toute la logique de décision collective.
+\item \textbf{Communication synchrone (REST)} entre le Gateway et les services, alors que le cours identifie l'AOE (architecture orientée événements) comme le style adapté aux systèmes distribués modernes nécessitant un couplage faible et de l'asynchronisme. Ce choix n'est pas idéal pour des flux continus de capteurs (latence, sur-sollicitation du Gateway).
+\item \textbf{Absence de middleware explicite} : le cours présente le middleware comme la couche qui assure un accès transparent et unifié aux ressources.
+\item \textbf{Absence de traitement explicite de la sécurité} : aucune mention d'authentification/chiffrement entre les objets tiny et le serveur, ce qui est critique pour un système embarqué connecté.
+\item \textbf{Scalabilité statique} : le nombre de processeurs/versions est fixé au déploiement ($k_1$, $k_2$), pas d'ajustement dynamique selon la charge réelle.
+\item \textbf{Absence de mécanisme de tolérance aux pannes explicite} (pas de retry, pas de circuit breaker, pas de réplication du manager).
+\end{enumerate}
+
+\newpage
+% =====================================================
+\section{Question 2 -- Nouvelle architecture modélisée avec le C4 Model}
+% =====================================================
+
+\subsection{Pourquoi le C4 Model}
+Le C4 Model (Simon Brown) est une notation de modélisation d'architecture logicielle à 4 niveaux de zoom -- Context, Containers, Components:
+\begin{itemize}
+\item \textbf{Niveau 1 -- Contexte système} : le système dans son environnement (utilisateurs, systèmes externes) $\rightarrow$ vue « métier », indépendante de toute technologie ;
+\item \textbf{Niveau 2 -- Conteneurs} : les grandes briques exécutables/déployables (application mobile, API, bases de données, micro-services) $\rightarrow$ correspond aux « architectures client-serveur / microservices / systèmes distribués » ;
+\item \textbf{Niveau 3 -- Composants} : zoom à l'intérieur d'un conteneur $\rightarrow$ correspond à « l'architecture en couches » ou « modulaire » appliquée à un service donné ;
+\item \textbf{Niveau 4 -- Code} : zoom sur les classes (donné à titre indicatif).
+\end{itemize}
+
+\subsection{Objectifs de la refonte}
+La nouvelle architecture doit conserver les qualités du système original (temps réel, précision par consensus, faible coût du edge) tout en corrigeant les limites identifiées en 2.5. On vise donc~:
+\begin{itemize}
+\item une architecture \textbf{élastique} (le nombre d'instances de service s'adapte à la charge, pas seulement au nombre de neurones) ;
+\item une architecture \textbf{résiliente} (pas de SPOF, tolérance aux pannes) ;
+\item une architecture \textbf{découplée dans le temps} (communication asynchrone pour les flux de capteurs tiny) ;
+\item une architecture \textbf{sécurisée par conception}.
+\end{itemize}
+
+\subsection{Patterns retenus et justification}
+\renewcommand{\arraystretch}{1.25}
+\begin{longtable}{|>{\raggedright\arraybackslash}p{3.1cm}|
+                  >{\raggedright\arraybackslash}p{4.6cm}|
+                  >{\raggedright\arraybackslash}p{6.1cm}|}
+\hline
+\textbf{Pattern proposé} & \textbf{Rôle} & \textbf{Justification / gain par rapport à l'existant} \\
+\hline
+\endhead
+API Gateway + Load Balancer & Point d'entrée unique, répartition de charge vers les instances de micro-services & Remplace la Gateway simple par une Gateway avec équilibrage et circuit breaker $\Rightarrow$ tolérance aux pannes (corrige limite 6.3.4/6.3.7) \\ \hline
+Architecture pilotée par événements (Event-Driven, broker MQTT/Kafka) & Les objets tiny publient leurs données sur un topic au lieu d'appeler une API REST synchrone & Découplage temporel, meilleure scalabilité pour un grand nombre d'objets connectés, tolérant à la latence réseau (corrige limite 2.5.3) \\ \hline
+Micro-services conteneurisés + orchestrateur (Kubernetes) & Chaque service DNN (face, objet, genre, émotion) est un conteneur, répliqué automatiquement & Élasticité dynamique (auto-scaling) au lieu d'un mapping statique processeur $\leftrightarrow$ neurone (corrige limites 2.5.1 et 2.5.6) \\ \hline
+Model Serving dédié (ex. TensorFlow Serving / Triton) & Gère les différentes versions de modèles (CNN, DNN, RNN) et leur cycle de vie & Découple le versioning des modèles du déploiement infrastructure, facilite l'ajout d'une nouvelle version de DNN sans redéploiement de l'architecture \\ \hline
+Manager collectif répliqué (Leader Election / quorum) & Le manager collectif est assuré par plusieurs instances avec élection d'un leader & Supprime le SPOF identifié en 2.5.2, tout en restant fidèle à la notion d'IAD (« $N$ décideurs coopérant ») du cours \\ \hline
+Circuit Breaker + Retry & Protège les appels entre Gateway et micro-services & Tolérance aux pannes et dégradation progressive du service (corrige limite 2.5.7) \\ \hline
+Sécurité Zero-Trust (mTLS, OAuth2/JWT) & Authentifie chaque objet tiny, chaque client et chaque micro-service & Corrige l'absence de sécurité de l'architecture initiale (limite 2.5.5) \\ \hline
+CQRS léger + journal d'événements & Sépare l'écriture (capteurs) de la lecture (dashboard et audit) & Conserve l'historique des décisions collectives pour faciliter l'explicabilité et le débogage \\ \hline
+\caption{Patterns retenus pour la nouvelle architecture et leur justification.}
+\end{longtable}
+\renewcommand{\arraystretch}{1}
+
+\subsection{Niveau 1 -- Diagramme de contexte système}
+
+
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[
+  node distance=1.4cm and 1.8cm,
+  actor/.style={draw, rounded corners, fill=clientCol, minimum width=3cm, minimum height=1.1cm, align=center, font=\small},
+  sys/.style={draw, thick, fill=mgrCol, minimum width=6cm, minimum height=2.2cm, align=center, font=\small\bfseries},
+  ext/.style={draw, rounded corners, fill=extCol, minimum width=3cm, minimum height=1.1cm, align=center, font=\small},
+  arr/.style={-{Latex[length=2mm]}, thick}
+]
+\node[actor] (user) {Utilisateur\\(personne assistée,\\véhicule autonome...)};
+\node[sys, right=3.2cm of user] (sys) {Système\\DNN//$^{*}$Tcs\\(nouvelle architecture)};
+\node[ext, above right=1.0cm and 0.2cm of sys] (tiny) {Objets connectés\\(capteurs / Tiny)};
+\node[ext, below right=1.0cm and 0.2cm of sys] (cloud) {Stockage cloud\\/ Datasets};
+
+\draw[arr] (user) -- node[above, font=\scriptsize]{utilise} (sys);
+\draw[arr] (tiny) -- node[above, sloped, font=\scriptsize]{publie des données} (sys);
+\draw[arr] (sys) -- node[below, sloped, font=\scriptsize]{persiste / entraîne} (cloud);
+\end{tikzpicture}
+\caption{Niveau 1 -- Diagramme de contexte système.}
+\end{figure}
+
+\subsection{Niveau 2 -- Diagramme de conteneurs}
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[
+  node distance=0.8cm and 0.55cm,
+  cont/.style={draw, rounded corners, minimum width=2.75cm, minimum height=1.25cm, align=center, font=\scriptsize},
+  store/.style={cont, minimum width=3.4cm},
+  arr/.style={-{Latex[length=1.8mm]}, thick},
+  branch/.style={thin}
+]
+\node[cont, fill=clientCol] (mobile) {App Mobile\\(Android/iOS)\\inférence légère};
+\node[cont, fill=gwCol, right=of mobile] (gw) {API Gateway\\(middleware)\\REST + auth};
+\node[cont, fill=extCol, right=of gw] (bus) {Bus d'événements\\(MQTT/Kafka)\\AOE};
+\node[cont, fill=extCol, right=of bus] (firmware) {Firmware Tiny\\(objets connectés)};
+\node[cont, fill=mgrCol, below=1cm of bus] (mgr) {Manager Collectif\\(IAD, répliqué)\\orchestrateur};
+
+\node[cont, fill=svcCol, below=3.3cm of mobile] (face) {Service\\Reconnaissance\\Faciale};
+\node[cont, fill=svcCol, right=of face] (objd) {Service\\Détection\\d'Objets};
+\node[cont, fill=svcCol, right=of objd] (gender) {Service\\Classification\\Genre};
+\node[cont, fill=svcCol, right=of gender] (emo) {Service\\Reconnaissance\\Émotion};
+
+\node[store, fill=dataCol, below=1.2cm of objd] (model) {Model Serving\\(versions CNN/DNN/RNN)};
+\node[store, fill=dataCol, below=1.2cm of emo] (db) {Base de données\\Event Store};
+
+\coordinate[below=0.5cm of mgr] (servicebus);
+\coordinate[above=0.5cm of model] (modelbus);
+
+\draw[arr] (mobile) -- (gw);
+\draw[arr] (gw) -- (bus);
+\draw[arr] (firmware) -- (bus);
+\draw[arr] (firmware.north) -- ++(0,0.55) -| (gw.north);
+\draw[arr] (bus) -- (mgr);
+
+% Répartition du manager vers les quatre services, sans traverser les boîtes.
+\draw[branch] (mgr.south) -- (servicebus);
+\draw[arr] (servicebus) -| (face.north);
+\draw[arr] (servicebus) -| (objd.north);
+\draw[arr] (servicebus) -| (gender.north);
+\draw[arr] (servicebus) -| (emo.north);
+
+% Les services partagent un accès commun au serveur de modèles.
+\draw[branch] (face.south) |- (modelbus);
+\draw[branch] (objd.south) |- (modelbus);
+\draw[branch] (gender.south) |- (modelbus);
+\draw[branch] (emo.south) |- (modelbus);
+\draw[arr] (modelbus) -- (model.north);
+
+% La persistance est routée à l'extérieur de la rangée des services.
+\draw[arr] (mgr.east) -- ++(3.45,0) |- (db.east);
+\end{tikzpicture}
+\caption{Niveau 2 -- Diagramme de conteneurs de la nouvelle architecture.}
+\end{figure}
+
+\subsection{Niveau 3 -- Diagramme de composants (zoom sur le conteneur Service Reconnaissance Faciale)}
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[
+  node distance=1cm and 1.4cm,
+  comp/.style={draw, rounded corners, minimum width=3.25cm, minimum height=1.15cm, align=center, font=\scriptsize},
+  arr/.style={-{Latex[length=1.8mm]}, thick}
+]
+\node[comp, fill=gwCol] (ctrl) {Contrôleur REST\\(entrée du service)};
+\node[comp, fill=svcCol, below left=1.1cm and 1.4cm of ctrl] (lbph) {Composant\\LBPH Recognizer};
+\node[comp, fill=svcCol, below right=1.1cm and 1.4cm of ctrl] (cnn) {Composant\\CNN Recognizer};
+\node[comp, fill=mgrCol, below=3.1cm of ctrl] (agg) {Agrégateur de résultats\\(confiance, vote)};
+\node[comp, fill=dataCol, below left=1.1cm and 1.4cm of agg] (dataset) {Dataset Dynamique\\(mise à jour temps réel)};
+\node[comp, fill=dataCol, below right=1.1cm and 1.4cm of agg] (train) {Module\\Entraînement Dynamique};
+
+\coordinate[below=0.5cm of train] (feedbackbottom);
+\coordinate[left=0.5cm of lbph] (feedbackleft);
+
+\draw[arr] (ctrl) -- (lbph);
+\draw[arr] (ctrl) -- (cnn);
+\draw[arr] (lbph) -- (agg);
+\draw[arr] (cnn) -- (agg);
+\draw[arr] (agg) -- (dataset);
+\draw[arr] (dataset) -- (train);
+\draw[arr] (train.east) -- ++(0.55,0) |- (cnn.east);
+\draw[arr] (train.south) -- (feedbackbottom) -| (feedbackleft) -- (lbph.west);
+\end{tikzpicture}
+\caption{Niveau 3 -- Diagramme de composants du conteneur Service Reconnaissance Faciale.}
+\end{figure}
+
+\demarche{Ce niveau applique le style « en couches » et « modulaire » du cours à l'intérieur d'un seul conteneur : le Contrôleur REST = couche interaction, les Recognizers (LBPH, CNN) = couche fonctionnalités, et l'Agrégateur = couche règles de gestion (équivalent de la fonction \texttt{Choose()} de l'article, mais isolée et testable indépendamment).}
+
+
+\subsection{Justification synthétique du choix (correction limite par limite)}
+\begin{itemize}
+\item Couplage fort matériel/logiciel $\rightarrow$ conteneurisation + orchestration (le nombre de répliques dépend de la charge observée, pas uniquement du nombre de neurones).
+\item SPOF du manager $\rightarrow$ réplication + élection de leader.
+\item Communication REST synchrone $\rightarrow$ broker asynchrone (AOE) pour les flux capteurs.
+\item Absence de sécurité $\rightarrow$ authentification mutuelle et chiffrement de bout en bout (Zero-Trust).
+\item Scalabilité statique $\rightarrow$ auto-scaling Kubernetes.
+\item Absence de tolérance aux pannes $\rightarrow$ circuit breaker, retry, réplication.
+\item Absence de middleware explicite $\rightarrow$ API Gateway formalisée comme middleware (accès transparent et unifié aux services).
+\end{itemize}
+
+\newpage
+% =====================================================
+\section{Idées de validation de la nouvelle architecture}
+% =====================================================
+
+\subsection{Validation qualitative}
+\begin{itemize}
+\item \textbf{Conformité C4} : vérifier que chaque conteneur du niveau 2 est bien traçable vers un style architectural défini.
+\item \textbf{Revue ATAM} (Architecture Tradeoff Analysis Method) : définir des scénarios de qualité (« le Manager Collectif tombe en panne, le système doit continuer à répondre en moins de 500\,ms avec une dégradation acceptable de précision » ; « 1000 objets tiny publient simultanément ») et vérifier que l'architecture proposée les satisfait, en comparant explicitement avec l'architecture d'origine.
+\item \textbf{Revue d'architecture par les pairs} (architecture walkthrough) : présentation des diagrammes de composants et de déploiement à un groupe d'experts pour identifier des incohérences.
+\item \textbf{Vérification de conformité} (architecture conformance checking) avec des outils comme ArchUnit / Structurizr pour s'assurer que l'implémentation respecte les couches définies (pas d'appel direct d'un micro-service à un autre en dehors de l'orchestrateur, etc.).
+\item \textbf{Vérification de la séparation matériel/logiciel} : s'assurer, via une revue de code, qu'aucun composant logiciel (niveau 3) ne dépend explicitement d'un nombre de cœurs physiques (contrairement à $P^{*} = (\alpha N_O + \beta N_F) \times |N_l|$ dans l'article).
+\end{itemize}
+
+\subsection{Validation quantitative}
+\begin{itemize}
+\item \textbf{Prototype par conteneur} : chaque conteneur du niveau 2 est implémenté isolément (ex. Docker) et testé unitairement avant intégration -- cohérent avec le principe modulaire du cours.
+\item \textbf{Prototypage comparatif} : rejouer les mêmes datasets que l'article (Multi-PIE, Bosphorus, YouTube-BoundingBoxes) sur le nouveau Manager Collectif et comparer taux de faux positifs/négatifs (matrices de confusion) avec les résultats déjà publiés (Tables 1--3 de l'article) : latence bout-en-bout, débit (requêtes/s).
+\item \textbf{Tests de charge} (Locust / JMeter) sur le Bus d'événements et l'API Gateway pour valider le passage à l'échelle horizontal des conteneurs Service, en simulant un grand nombre de clients et d'objets tiny.
+\item \textbf{Tests de résilience / chaos engineering} (ex. Chaos Monkey) sur le Manager Collectif répliqué : couper une réplique (ou un micro-service) et vérifier la continuité de la décision collective grâce à la réplication et au circuit breaker -- validation directe de la correction de la limite « manager centralisé ».
+\item \textbf{Mesure de la disponibilité} (SLA/SLO) : calcul du taux de disponibilité (\%) sur une période de test prolongée, comparé à l'architecture centralisée initiale.
+\item \textbf{Analyse de sécurité} : tests de pénétration légers sur le canal de communication objets tiny $\rightarrow$ broker pour valider le chiffrement/l'authentification.
+\end{itemize}
+
+\subsection{Indicateurs de succès}
+\renewcommand{\arraystretch}{1.25}
+\begin{longtable}{|>{\raggedright\arraybackslash}p{3.8cm}|
+                  >{\raggedright\arraybackslash}p{5.3cm}|
+                  >{\raggedright\arraybackslash}p{4.2cm}|}
+\hline
+\textbf{Indicateur} & \textbf{Méthode de mesure} & \textbf{Objectif visé} \\
+\hline
+\endhead
+Conformité C4/cours & Nombre de conteneurs justifiés par rapport au nombre total & 100\% \\ \hline
+Latence de décision collective & Chronométrage bout-en-bout sur le prototype & Inférieure ou égale à celle de l'architecture initiale \\ \hline
+Taux de faux positifs & Matrice de confusion sur les mêmes jeux de données & Égal ou inférieur au résultat de Tiny YOLOv8cs \\ \hline
+Disponibilité du Manager Collectif & Monitoring pendant des pannes simulées & Au moins 99,9\% \\ \hline
+Découplage matériel/logiciel & Recherche des dépendances au nombre de cœurs dans le code & Aucune dépendance directe \\ \hline
+Élasticité & Comparaison entre la charge et le nombre d'instances déployées & Corrélation supérieure à 0,9 \\ \hline
+Sécurité & Nombre de vulnérabilités critiques détectées & Aucune vulnérabilité critique \\ \hline
+\caption{Indicateurs de succès proposés pour la validation de la nouvelle architecture.}
+\end{longtable}
+\renewcommand{\arraystretch}{1}
+
+\newpage
+% =====================================================
+\section{Conclusion}
+% =====================================================
+L'architecture originale DNN//$^{*}$Tcs repose sur un modèle client-serveur à 3 niveaux combiné à des micro-services multi-processus et une couche TinyML, avec un manager centralisé (\texttt{MSParallelCollectiveManager}) assurant la sélection collective du meilleur résultat -- une manifestation directe de la notion d'\emph{Intelligence Artificielle Distribuée} (« architecture collective intelligente ») introduite au Chapitre I du cours. Cette architecture atteint ses objectifs de temps réel et de précision, comme le montrent les résultats expérimentaux de l'article, mais présente des limites de couplage matériel/algorithme, de résilience, de communication et de sécurité.
+
+La nouvelle architecture proposée conserve la même philosophie (parallélisme et consensus collectif) mais la modernise via une architecture pilotée par événements, une orchestration conteneurisée élastique, un manager répliqué (élection de leader) et une sécurité by design, le tout modélisé avec le C4 Model (Contexte, Conteneurs, Composants, Code). Cette modélisation permet -- conformément au cours -- de séparer clairement l'architecture logicielle de l'architecture matérielle, corrigeant ainsi la principale limite identifiée dans le système original. Un plan de validation mixte (qualitatif -- ATAM, revue d'architecture -- et quantitatif -- prototypage, tests de charge, chaos engineering) permet de démontrer objectivement les gains apportés par rapport à l'architecture initiale.
+
+
+\end{document}
